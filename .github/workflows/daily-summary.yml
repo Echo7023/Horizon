@@ -2,38 +2,62 @@ name: Daily Horizon Summary
 
 on:
   schedule:
-    # GitHub scheduled workflows use UTC. 0:30 UTC is 08:30 Asia/Shanghai.
-    - cron: '30 0 * * *'
+    # 22:00 UTC = 06:00 AM Asia/Shanghai (off-peak, more reliable)
+    - cron: '0 22 * * *'
   workflow_dispatch:      # Allow manual trigger
 
 jobs:
   daily-summary:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Needed to commit changes
+      contents: write  # Needed to fetch gh-pages and deploy
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Set current date
+        id: date
+        run: echo "value=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Check if today's summary already published
+        id: check
+        run: |
+          DATE="${{ steps.date.outputs.value }}"
+          echo "📅 Today (UTC): ${DATE}"
+
+          # Fetch gh-pages branch to check for existing posts
+          git fetch origin gh-pages --depth=1 2>/dev/null || true
+
+          if git cat-file -e "origin/gh-pages:_posts/${DATE}-summary-zh.md" 2>/dev/null; then
+            echo "✅ Summary for ${DATE} already published on gh-pages, skipping."
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "⏳ No existing summary for ${DATE}, proceeding..."
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up Python
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Install uv
+        if: steps.check.outputs.skip != 'true'
         uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
+        if: steps.check.outputs.skip != 'true'
         run: uv sync
 
       - name: Prepare GitHub Actions config
+        if: steps.check.outputs.skip != 'true'
         run: cp data/config.github.json data/config.json
 
       - name: Run Horizon
+        if: steps.check.outputs.skip != 'true'
         env:
-          # Map secrets to environment variables expected by config.json
-          # Modify these based on your data/config.github.json provider settings
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
@@ -47,15 +71,13 @@ jobs:
           echo '["702381626@qq.com"]' > data/subscribers.json
           uv run horizon --hours 24
 
-      - name: Set current date as environment variable
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-
       - name: Deploy to GitHub Pages
+        if: steps.check.outputs.skip != 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs
           keep_files: true  # Keep existing summaries on gh-pages branch
-          commit_message: "📝 Daily Summary: ${{ env.DATE }}"
+          commit_message: "📝 Daily Summary: ${{ steps.date.outputs.value }}"
           publish_branch: gh-pages
           enable_jekyll: true

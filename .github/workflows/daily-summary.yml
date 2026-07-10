@@ -2,8 +2,8 @@ name: Daily Horizon Summary
 
 on:
   schedule:
-    # 22:00 UTC = 06:00 AM Asia/Shanghai (off-peak, more reliable)
-    - cron: '0 22 * * *'
+    # 18:00 UTC = 02:00 AM Asia/Shanghai (lowest traffic, ample buffer)
+    - cron: '0 18 * * *'
   workflow_dispatch:      # Allow manual trigger
 
 jobs:

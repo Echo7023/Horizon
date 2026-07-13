@@ -190,7 +190,7 @@ class EmailManager:
 
         try:
             with smtplib.SMTP_SSL(
-                self.config.smtp_server, self.config.smtp_port
+                self.config.smtp_server, self.config.smtp_port, timeout=30
             ) as server:
                 server.login(
                     self.config.smtp_username or self.config.email_address, self.pwd
@@ -213,11 +213,14 @@ class EmailManager:
                     try:
                         server.send_message(msg)
                         logger.info(f"Sent summary to {subscriber}")
+                        self.console.print(f"  [green]✓ Sent summary to {subscriber}[/green]")
                     except Exception as e:
                         logger.error(f"Failed to send to {subscriber}: {e}")
+                        self.console.print(f"  [red]✗ Failed to send email to {subscriber}: {e}[/red]")
 
         except Exception as e:
             logger.error(f"SMTP Error: {e}")
+            self.console.print(f"  [red]✗ SMTP Error: {e}[/red]")
 
     def _send_reply(self, to_email: str, subject: str, body: str):
         """Helper to send a simple reply."""
